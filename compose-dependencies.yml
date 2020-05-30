@@ -1,0 +1,13 @@
+version: "3"
+
+services:
+    sqlserver:
+        image: mcr.microsoft.com/mssql/server:2019-latest
+        hostname: sqlserver
+        container_name: sqlserver
+        ports:
+            - "1433:1433"
+        environment:
+            ACCEPT_EULA: Y
+            SA_PASSWORD: StupidPassw0rd
+            MSSQL_PID: Developer
