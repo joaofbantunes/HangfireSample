@@ -1,0 +1,137 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: sqlserver
+  name: sqlserver
+spec:
+  containers:
+  - image: mcr.microsoft.com/mssql/server:2019-latest
+    name: sqlserver
+    env:
+      - name: ACCEPT_EULA
+        value: "Y"
+      - name: MSSQL_SA_PASSWORD
+        value: "StupidPassw0rd"
+      - name: MSSQL_PID
+        value: "Developer"
+    ports:
+    - containerPort: 1433
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sqlserver-svc
+spec:
+  selector:
+    app: sqlserver
+  ports:
+    - protocol: TCP
+      port: 1433
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sqlserver-secrets
+type: Opaque
+stringData:
+  ConnectionString: "Server=sqlserver-svc; Database=HangfireSample; User Id=sa;Password=StupidPassw0rd;"
+  Password: "StupidPassw0rd"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-deployment
+  labels:
+    app: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      initContainers:
+      - name: create-database
+        image: mcr.microsoft.com/mssql-tools
+        command: ['sh', '-c', '/opt/mssql-tools/bin/sqlcmd -S sqlserver-svc -U sa -P $(Password) -d master -q "IF DB_ID (N''HangfireSample'') IS NULL Create Database HangfireSample;"']
+        env:
+        - name: Password
+          valueFrom:
+            secretKeyRef:
+              name: sqlserver-secrets
+              key: Password
+      containers:
+      - name: api
+        image: hangfire-sample/api:1.0
+        ports:
+        - containerPort: 80
+        env:
+        - name: ConnectionString
+          valueFrom:
+            secretKeyRef:
+              name: sqlserver-secrets
+              key: ConnectionString
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 1
+          periodSeconds: 1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 1
+          periodSeconds: 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-svc
+spec:
+  type: LoadBalancer
+  selector:
+    app: api
+  ports:
+    - protocol: TCP
+      port: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-deployment
+  labels:
+    app: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      initContainers:
+      - name: create-database
+        image: mcr.microsoft.com/mssql-tools
+        command: ['sh', '-c', '/opt/mssql-tools/bin/sqlcmd -S sqlserver-svc -U sa -P $(Password) -d master -q "IF DB_ID (N''HangfireSample'') IS NULL Create Database HangfireSample;"']
+        env:
+        - name: Password
+          valueFrom:
+            secretKeyRef:
+              name: sqlserver-secrets
+              key: Password
+      containers:
+      - name: worker
+        image: hangfire-sample/worker:1.0
+        env:
+        - name: ConnectionString
+          valueFrom:
+            secretKeyRef:
+              name: sqlserver-secrets
+              key: ConnectionString
