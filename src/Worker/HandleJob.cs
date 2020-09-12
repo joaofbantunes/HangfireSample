@@ -14,15 +14,17 @@ namespace Worker
         {
             _logger = logger;
         }
-
+        
         public async Task HandleAsync(string jobId, CancellationToken ct)
         {
+            //throw new NotImplementedException("😈");
+            
             try
             {
                 _logger.LogInformation($"Starting {nameof(HandleAsync)} with {jobId}");
-
+            
                 await Task.Delay(TimeSpan.FromSeconds(30), ct);
-
+            
                 _logger.LogInformation($"Finishing {nameof(HandleAsync)} with {jobId}");
             }
             catch (OperationCanceledException)
